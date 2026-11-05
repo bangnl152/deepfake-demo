@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phòng thí nghiệm Deepfake</title>
+<meta name="description" content="Demo deepfake cho bài giảng an toàn thông tin cho trẻ em. Mọi xử lý chạy trên máy, không gửi dữ liệu đi đâu.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Be+Vietnam+Pro:wght@400;500;600&family=Roboto+Mono:wght@500&display=swap">
+<style>
+/* Layout: one working column — camera studio, then result stage, then the lesson. */
+:root{
+  --bg:#eef2f6; --surface:#ffffff; --ink:#18222f; --muted:#5a6878; --line:#d3dbe4;
+  --accent:#e0483b; --accent-ink:#ffffff; --ok:#14866d; --warn:#b26a00; --stage:#121a24;
+  --display:"Baloo 2","Be Vietnam Pro",system-ui,sans-serif;
+  --body:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Roboto Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10161e; --surface:#18212c; --ink:#e7edf4; --muted:#9aa8b8; --line:#2b3746;
+  --accent:#ff6a5c; --accent-ink:#1a0d0b; --ok:#3fc7a4; --warn:#f0a83c; --stage:#080c11; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161e; --surface:#18212c; --ink:#e7edf4; --muted:#9aa8b8; --line:#2b3746;
+  --accent:#ff6a5c; --accent-ink:#1a0d0b; --ok:#3fc7a4; --warn:#f0a83c; --stage:#080c11; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:20px 48px}
+[hidden]{display:none!important}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
+h1{font:800 clamp(28px,5vw,44px)/1.05 var(--display);margin:0;text-wrap:balance}
+h1 .stamp{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:0 .3em;border-radius:6px;transform:rotate(-2deg)}
+.sub{margin:6px 0 0;color:var(--muted);max-width:60ch}
+.ai{font:500 12px/1 var(--mono);letter-spacing:.04em;padding:8px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);display:inline-flex;gap:8px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.ai.ready .dot{background:var(--ok)} .ai.err .dot{background:var(--accent)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+h2{font:800 22px/1.2 var(--display);margin:0}
+.label{font:500 11px/1 var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.cam{position:relative;aspect-ratio:4/3;max-width:100%;background:var(--stage);border-radius:10px;overflow:hidden}
+.cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam .oval{position:absolute;left:50%;top:48%;width:42%;height:72%;transform:translate(-50%,-50%);border:3px dashed rgba(255,255,255,.75);border-radius:50%;pointer-events:none}
+.cam .hint{position:absolute;inset:auto 0 0 0;padding:10px;color:#fff;font-size:14px;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+.cam .rec{position:absolute;top:10px;left:10px;background:var(--accent);color:var(--accent-ink);font:500 13px/1 var(--mono);padding:6px 10px;border-radius:6px}
+.cam .off{position:absolute;inset:0;display:grid;place-items:center;color:#c9d3de;text-align:center;padding:20px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button,.btn{font:600 15px/1 var(--body);padding:12px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;gap:8px;align-items:center;text-decoration:none}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,.btn:focus-visible,label.file:focus-within,input:focus-visible+span{outline:3px solid var(--ok);outline-offset:2px}
+label.file{font-size:14px;color:var(--muted);text-decoration:underline;cursor:pointer}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+.steps{display:flex;flex-direction:column;gap:12px}
+.step{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;align-items:center}
+.thumb{width:96px;aspect-ratio:4/3;border-radius:8px;background:var(--bg);border:1px dashed var(--line);overflow:hidden;display:grid;place-items:center;color:var(--muted);font:600 22px var(--display)}
+.thumb canvas,.thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.step b{display:block}
+.step small{color:var(--muted);display:block}
+.status-ok{color:var(--ok)} .status-err{color:var(--accent)}
+.voices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.voices label{position:relative}
+.voices input{position:absolute;opacity:0}
+.voices span{display:block;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;cursor:pointer}
+.voices input:checked+span{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.consent input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent)}
+.stage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:600px){.stage{grid-template-columns:minmax(0,1fr)}}
+.screen{display:flex;flex-direction:column;gap:6px;min-width:0}
+.screen .box{aspect-ratio:4/3;max-width:100%;background:var(--stage);border-radius:10px;overflow:hidden;display:grid;place-items:center;color:#8b98a7;font-size:14px;text-align:center;padding:0}
+.screen video,.screen canvas{width:100%;height:100%;object-fit:contain;display:block}
+.bar{height:8px;background:var(--bg);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.msg{font-size:14px;color:var(--muted);margin:0}
+.lesson{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+@media (max-width:760px){.lesson{grid-template-columns:minmax(0,1fr)}}
+.lesson ol,.lesson ul{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:8px;max-width:60ch}
+.lesson li b{color:var(--ink)}
+.lesson li{color:var(--muted)}
+footer{color:var(--muted);font-size:13px;text-align:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Phòng thí nghiệm <span class="stamp">Deepfake</span></h1>
+      <p class="sub">Chụp một khuôn mặt, quay một đoạn clip, rồi xem AI ghép mặt và đổi giọng chỉ trong vài giây. Mọi thứ chạy trên máy này, không gửi ảnh hay video đi đâu cả.</p>
+    </div>
+    <span class="ai" id="aiStatus"><span class="dot"></span><span id="aiText">Đang tải mô hình AI…</span></span>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="studioTitle">
+      <div class="row" style="justify-content:space-between">
+        <h2 id="studioTitle">Máy quay</h2>
+        <span class="label">Canh mặt vào khung oval</span>
+      </div>
+      <div class="cam">
+        <video id="live" playsinline muted></video>
+        <div class="oval" aria-hidden="true"></div>
+        <div class="off" id="camOff">Bấm “Bật camera” để bắt đầu.<br>Trình duyệt sẽ xin quyền dùng camera và micro.</div>
+        <div class="rec" id="recBadge" hidden>● REC <span id="recTime">0</span>s</div>
+        <div class="hint" id="camHint" hidden>Nhìn thẳng, đủ sáng, giữ mặt trong khung</div>
+      </div>
+      <div class="row">
+        <button id="btnCam">Bật camera</button>
+        <button id="btnPhoto" disabled>① Chụp ảnh người cần giả dạng</button>
+        <button id="btnClip" disabled>② Quay clip 8 giây</button>
+      </div>
+      <div class="row">
+        <label class="file">hoặc tải ảnh lên<input type="file" id="filePhoto" accept="image/*"></label>
+        <label class="file">hoặc tải video lên<input type="file" id="fileClip" accept="video/*"></label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="stepsTitle">
+      <h2 id="stepsTitle">Các bước</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="thumb" id="thumbPhoto">1</div>
+          <div><b>Ảnh “người cần giả dạng”</b><small id="photoMsg">Chưa có ảnh</small></div>
+        </div>
+        <div class="step">
+          <div class="thumb" id="thumbClip">2</div>
+          <div><b>Clip của người quay</b><small id="clipMsg">Chưa có clip</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:8px">Đổi giọng</div>
+        <div class="voices" role="radiogroup">
+          <label><input type="radio" name="voice" id="vDeep" value="deep" checked><span>Giọng người lớn (trầm)</span></label>
+          <label><input type="radio" name="voice" id="vHigh" value="high"><span>Giọng trẻ con (cao)</span></label>
+          <label><input type="radio" name="voice" id="vRobot" value="robot"><span>Giọng robot</span></label>
+          <label><input type="radio" name="voice" id="vNone" value="none"><span>Giữ giọng gốc</span></label>
+        </div>
+      </div>
+      <label class="consent"><input type="checkbox" id="consent"><span>Người trong ảnh đã đồng ý cho dùng khuôn mặt của mình trong buổi demo này.</span></label>
+      <button class="primary" id="btnMake" disabled>③ Tạo video deepfake</button>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="stageTitle">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="stageTitle">Kết quả</h2>
+      <a class="btn" id="btnDownload" hidden download="video-gia-deepfake.webm">Tải video giả về</a>
+    </div>
+    <div class="bar" id="bar" hidden><i id="barFill"></i></div>
+    <p class="msg" id="makeMsg">Làm xong bước ① và ② rồi bấm ③. Video kết quả sẽ có dấu “VIDEO GIẢ”.</p>
+    <div class="stage">
+      <div class="screen">
+        <span class="label">Bản gốc</span>
+        <div class="box" id="origBox">Clip gốc hiện ở đây</div>
+      </div>
+      <div class="screen">
+        <span class="label">Bản deepfake</span>
+        <div class="box" id="fakeBox">Video giả hiện ở đây</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="lessonTitle">
+    <h2 id="lessonTitle">Làm sao nhận ra video giả?</h2>
+    <div class="lesson">
+      <div>
+        <div class="label" style="margin-bottom:10px">Soi kỹ 5 chỗ này</div>
+        <ul>
+          <li><b>Viền khuôn mặt</b> bị nhòe, lệch màu với cổ và tai.</li>
+          <li><b>Miệng</b> không khớp với tiếng nói, răng và lưỡi trông lạ.</li>
+          <li><b>Mắt</b> ít chớp hoặc nhìn đờ đẫn.</li>
+          <li><b>Ánh sáng</b> trên mặt khác với ánh sáng xung quanh.</li>
+          <li><b>Giọng nói</b> đều đều như máy, nghe giống mà vẫn lạ.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:10px">3 quy tắc an toàn</div>
+        <ol>
+          <li><b>Không gửi ảnh, video của mình</b> cho người lạ trên mạng.</li>
+          <li><b>Gọi lại để kiểm tra.</b> Ai nhờ chuyển tiền hay xin mật khẩu qua video, hãy gọi lại cho người thân bằng số quen thuộc.</li>
+          <li><b>Báo ngay cho bố mẹ, thầy cô</b> khi thấy video lạ về mình hoặc bạn bè.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <footer>Demo giáo dục. Ghép mặt bằng MediaPipe Face Landmarker (478 điểm trên khuôn mặt), đổi giọng bằng xử lý âm thanh trên máy.</footer>
+</div>
+
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+import Delaunator from "https://cdn.jsdelivr.net/npm/delaunator@5.0.1/+esm";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const CLIP_SECONDS = 8;
+const N_PTS = 468; // bỏ 10 điểm mống mắt
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const INNER_LIPS = new Set([78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95]);
+
+const $ = id => document.getElementById(id);
+const S = { stream:null, lm:null, mode:null, photo:null, srcPts:null, srcMean:null, tris:null, clipBlob:null, busy:false };
+
+/* ---------- AI model ---------- */
+async function initAI(){
+  try{
+    const fileset = await FilesetResolver.forVisionTasks(WASM);
+    const opts = d => ({ baseOptions:{ modelAssetPath:MODEL, delegate:d }, runningMode:"IMAGE", numFaces:1 });
+    try { S.lm = await FaceLandmarker.createFromOptions(fileset, opts("GPU")); }
+    catch { S.lm = await FaceLandmarker.createFromOptions(fileset, opts("CPU")); }
+    S.mode = "IMAGE";
+    $("aiStatus").classList.add("ready"); $("aiText").textContent = "Mô hình AI sẵn sàng";
+    if (S.photo && !S.srcPts) analysePhoto();
+  }catch(e){
+    console.error(e);
+    $("aiStatus").classList.add("err"); $("aiText").textContent = "Không tải được mô hình AI. Kiểm tra mạng rồi tải lại trang.";
+  }
+}
+async function setMode(m){ if (S.mode !== m){ await S.lm.setOptions({ runningMode:m }); S.mode = m; } }
+initAI();
+
+/* ---------- Camera ---------- */
+$("btnCam").onclick = async () => {
+  try{
+    S.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user", width:{ideal:640}, height:{ideal:480} }, audio:true });
+  }catch(e){
+    try { S.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" } }); setClipMsg("Không có micro, clip sẽ không có tiếng.", "err"); }
+    catch { $("camOff").textContent = "Không mở được camera. Hãy cho phép quyền camera, hoặc dùng nút tải ảnh / video lên."; return; }
+  }
+  const v = $("live"); v.srcObject = S.stream; await v.play();
+  $("camOff").hidden = true; $("camHint").hidden = false;
+  $("btnPhoto").disabled = false; $("btnClip").disabled = false;
+  $("btnCam").textContent = "Camera đang bật"; $("btnCam").disabled = true;
+};
+
+$("btnPhoto").onclick = () => {
+  const v = $("live"), c = document.createElement("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  setPhoto(c);
+};
+
+$("filePhoto").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(img.src); setPhoto(c);
+  };
+  img.src = URL.createObjectURL(f);
+};
+
+function setPhoto(c){ S.photo = c; S.srcPts = null; drawThumbPhoto(); setPhotoMsg("AI đang tìm khuôn mặt…"); if (S.lm) analysePhoto(); updateMake(); }
+
+async function analysePhoto(){
+  await setMode("IMAGE");
+  const r = S.lm.detect(S.photo);
+  const f = r.faceLandmarks && r.faceLandmarks[0];
+  if (!f){ setPhotoMsg("Không thấy khuôn mặt. Chụp lại, nhìn thẳng và đủ sáng.", "err"); updateMake(); return; }
+  const w = S.photo.width, h = S.photo.height;
+  S.srcPts = f.slice(0, N_PTS).map(p => [p.x * w, p.y * h]);
+  // Lưới tam giác trên mặt nguồn, bỏ phần trong miệng để miệng thật lộ ra khi nói
+  const d = Delaunator.from(S.srcPts);
+  const t = [];
+  for (let i = 0; i < d.triangles.length; i += 3){
+    const a = d.triangles[i], b = d.triangles[i+1], c = d.triangles[i+2];
+    if (INNER_LIPS.has(a) && INNER_LIPS.has(b) && INNER_LIPS.has(c)) continue;
+    t.push(a, b, c);
+  }
+  S.tris = new Uint16Array(t);
+  S.srcMean = meanColor(S.photo, w, h, FACE_OVAL.map(i => S.srcPts[i]));
+  drawThumbPhoto(true);
+  setPhotoMsg(`AI tìm thấy khuôn mặt với ${f.length} điểm mốc.`, "ok");
+  updateMake();
+}
+
+function drawThumbPhoto(withDots){
+  const c = document.createElement("canvas"); c.width = S.photo.width; c.height = S.photo.height;
+  const x = c.getContext("2d"); x.drawImage(S.photo, 0, 0);
+  if (withDots && S.srcPts){
+    x.fillStyle = "#3fc7a4"; const r = Math.max(1.5, c.width / 260);
+    for (const [px, py] of S.srcPts){ x.beginPath(); x.arc(px, py, r, 0, 7); x.fill(); }
+  }
+  $("thumbPhoto").replaceChildren(c);
+}
+
+/* ---------- Clip ---------- */
+function pickMime(){
+  const list = ["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm","video/mp4;codecs=avc1,mp4a.40.2","video/mp4"];
+  return list.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+}
+
+$("btnClip").onclick = () => {
+  const mime = pickMime();
+  const rec = new MediaRecorder(S.stream, mime ? { mimeType:mime } : undefined);
+  const chunks = [];
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = () => { clearInterval(tick); $("recBadge").hidden = true; $("btnClip").disabled = false; $("btnClip").textContent = "② Quay lại clip"; setClip(new Blob(chunks, { type: rec.mimeType || mime || "video/webm" })); };
+  rec.start(250);
+  let s = 0; $("recTime").textContent = CLIP_SECONDS; $("recBadge").hidden = false;
+  $("btnClip").disabled = true; $("btnClip").textContent = "Đang quay… nói gì đó nhé";
+  const tick = setInterval(() => { s++; $("recTime").textContent = CLIP_SECONDS - s; if (s >= CLIP_SECONDS) rec.stop(); }, 1000);
+};
+
+$("fileClip").onchange = e => { const f = e.target.files[0]; if (f) setClip(f); };
+
+function setClip(blob){
+  S.clipBlob = blob;
+  const v = document.createElement("video"); v.src = URL.createObjectURL(blob); v.muted = true; v.playsInline = true; v.loop = true; v.play().catch(()=>{});
+  $("thumbClip").replaceChildren(v);
+  setClipMsg(`Đã có clip (${(blob.size/1024/1024).toFixed(1)} MB).`, "ok");
+  updateMake();
+}
+
+function setPhotoMsg(t, k){ const m = $("photoMsg"); m.textContent = t; m.className = k ? "status-" + k : ""; }
+function setClipMsg(t, k){ const m = $("clipMsg"); m.textContent = t; m.className = k ? "status-" + k : ""; }
+function updateMake(){ $("btnMake").disabled = S.busy || !(S.srcPts && S.clipBlob && $("consent").checked); }
+$("consent").onchange = updateMake;
+
+/* ---------- Color helpers ---------- */
+function meanColor(src, w, h, poly){
+  const k = 96 / w, sw = 96, sh = Math.max(1, Math.round(h * k));
+  const a = document.createElement("canvas"); a.width = sw; a.height = sh;
+  const ax = a.getContext("2d", { willReadFrequently:true }); ax.drawImage(src, 0, 0, sw, sh);
+  const m = document.createElement("canvas"); m.width = sw; m.height = sh;
+  const mx = m.getContext("2d", { willReadFrequently:true });
+  mx.beginPath(); poly.forEach(([x, y], i) => i ? mx.lineTo(x*k, y*k) : mx.moveTo(x*k, y*k)); mx.closePath(); mx.fill();
+  const px = ax.getImageData(0, 0, sw, sh).data, mk = mx.getImageData(0, 0, sw, sh).data;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < px.length; i += 4) if (mk[i+3] > 128){ r += px[i]; g += px[i+1]; b += px[i+2]; n++; }
+  return n ? [r/n, g/n, b/n] : [128,128,128];
+}
+
+/* ---------- WebGL face warper ---------- */
+function makeWarper(w, h){
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const gl = c.getContext("webgl", { premultipliedAlpha:false, preserveDrawingBuffer:true });
+  if (!gl) throw new Error("Trình duyệt không hỗ trợ WebGL.");
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, `attribute vec2 aPos; attribute vec2 aUV; uniform vec2 uRes; varying vec2 vUV;
+    void main(){ vUV = aUV; vec2 q = aPos / uRes * 2.0 - 1.0; gl_Position = vec4(q.x, -q.y, 0.0, 1.0); }`));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, `precision mediump float; uniform sampler2D uTex; uniform vec3 uGain; varying vec2 vUV;
+    void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(clamp(c.rgb * uGain, 0.0, 1.0), 1.0); }`));
+  gl.linkProgram(p); gl.useProgram(p);
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, S.photo);
+  const uv = new Float32Array(N_PTS * 2);
+  S.srcPts.forEach(([x, y], i) => { uv[2*i] = x / S.photo.width; uv[2*i+1] = y / S.photo.height; });
+  const bind = (name, data, usage) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, usage);
+    const l = gl.getAttribLocation(p, name); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0); return b; };
+  bind("aUV", uv, gl.STATIC_DRAW);
+  const posBuf = bind("aPos", new Float32Array(N_PTS * 2), gl.DYNAMIC_DRAW);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, S.tris, gl.STATIC_DRAW);
+  gl.uniform2f(gl.getUniformLocation(p, "uRes"), w, h);
+  const uGain = gl.getUniformLocation(p, "uGain");
+  gl.viewport(0, 0, w, h);
+  const pos = new Float32Array(N_PTS * 2);
+  return { canvas:c, draw(pts, gain){
+    pts.forEach(([x, y], i) => { pos[2*i] = x; pos[2*i+1] = y; });
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos);
+    gl.uniform3f(uGain, gain[0], gain[1], gain[2]);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawElements(gl.TRIANGLES, S.tris.length, gl.UNSIGNED_SHORT, 0);
+  }};
+}
+
+/* ---------- Voice ---------- */
+function pitchShift(x, r, sr){
+  if (r === 1) return x.slice();
+  const N = Math.round(sr * 0.06), H = N >> 2, L = x.length;
+  const y = new Float32Array(L), ws = new Float32Array(L), w = new Float32Array(N);
+  for (let k = 0; k < N; k++) w[k] = 0.5 - 0.5 * Math.cos(2 * Math.PI * k / (N - 1));
+  for (let o = -N; o < L; o += H){
+    const c = o + N / 2;
+    for (let k = 0; k < N; k++){
+      const oi = o + k; if (oi < 0 || oi >= L) continue;
+      const s = c + (k - N / 2) * r, i = Math.floor(s); if (i < 0 || i + 1 >= L) continue;
+      const f = s - i; y[oi] += (x[i] * (1 - f) + x[i+1] * f) * w[k]; ws[oi] += w[k];
+    }
+  }
+  for (let i = 0; i < L; i++) if (ws[i] > 1e-3) y[i] /= ws[i];
+  return y;
+}
+function changeVoice(x, sr, kind){
+  let y;
+  if (kind === "deep") y = pitchShift(x, 0.72, sr);
+  else if (kind === "high") y = pitchShift(x, 1.5, sr);
+  else if (kind === "robot"){ y = pitchShift(x, 0.9, sr); for (let i = 0; i < y.length; i++) y[i] *= Math.sin(2 * Math.PI * 60 * i / sr); }
+  else y = x.slice();
+  let peak = 0; for (const v of y) peak = Math.max(peak, Math.abs(v));
+  if (peak > 0) { const g = 0.9 / peak; for (let i = 0; i < y.length; i++) y[i] *= g; }
+  return y;
+}
+
+/* ---------- Watermark ---------- */
+function watermark(ctx, w, h){
+  const u = w / 640;
+  ctx.save();
+  ctx.fillStyle = "rgba(224,72,59,.92)";
+  ctx.font = `800 ${Math.round(22*u)}px "Baloo 2", sans-serif`;
+  const t = "DEEPFAKE", tw = ctx.measureText(t).width;
+  ctx.fillRect(12*u, 12*u, tw + 20*u, 34*u);
+  ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(t, 22*u, 30*u);
+  ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(0, h - 34*u, w, 34*u);
+  ctx.fillStyle = "#fff"; ctx.font = `600 ${Math.round(15*u)}px "Be Vietnam Pro", sans-serif`; ctx.textAlign = "center";
+  ctx.fillText("VIDEO GIẢ · Demo bài giảng an toàn thông tin", w / 2, h - 17*u);
+  ctx.restore();
+}
+
+/* ---------- Make the deepfake ---------- */
+$("btnMake").onclick = make;
+
+async function make(){
+  S.busy = true; updateMake();
+  const msg = t => $("makeMsg").textContent = t;
+  const bar = $("bar"), fill = $("barFill"); bar.hidden = false; fill.style.width = "0%";
+  $("btnDownload").hidden = true;
+  try{
+    msg("Đang đổi giọng…");
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    await ac.resume();
+    let voiceBuf = null;
+    try{
+      const raw = await ac.decodeAudioData(await S.clipBlob.arrayBuffer());
+      const mono = new Float32Array(raw.length);
+      for (let ch = 0; ch < raw.numberOfChannels; ch++){ const d = raw.getChannelData(ch); for (let i = 0; i < d.length; i++) mono[i] += d[i] / raw.numberOfChannels; }
+      const kind = document.querySelector('input[name="voice"]:checked').value;
+      const out = changeVoice(mono, raw.sampleRate, kind);
+      voiceBuf = ac.createBuffer(1, out.length, raw.sampleRate); voiceBuf.copyToChannel(out, 0);
+    }catch(e){ console.warn("Không đọc được âm thanh", e); }
+
+    const v = document.createElement("video");
+    v.src = URL.createObjectURL(S.clipBlob); v.muted = true; v.playsInline = true; v.preload = "auto";
+    await new Promise((ok, bad) => { v.onloadeddata = ok; v.onerror = () => bad(new Error("Không mở được clip.")); });
+    $("origBox").replaceChildren(v);
+    const w = v.videoWidth, h = v.videoHeight;
+
+    const out = document.createElement("canvas"); out.width = w; out.height = h;
+    const ctx = out.getContext("2d");
+    $("fakeBox").replaceChildren(out);
+    const face = document.createElement("canvas"); face.width = w; face.height = h;
+    const fx = face.getContext("2d");
+    fx.filter = "blur(2px)"; const canBlur = fx.filter === "blur(2px)"; fx.filter = "none";
+    const warp = makeWarper(w, h);
+    await setMode("VIDEO");
+
+    let gain = [1,1,1], last = null, miss = 0, frame = 0;
+    const render = () => {
+      ctx.drawImage(v, 0, 0, w, h);
+      const r = S.lm.detectForVideo(v, performance.now());
+      const f = r.faceLandmarks && r.faceLandmarks[0];
+      if (f){ last = f.slice(0, N_PTS).map(p => [p.x * w, p.y * h]); miss = 0; } else miss++;
+      if (last && miss < 6){
+        const oval = FACE_OVAL.map(i => last[i]);
+        if (frame % 4 === 0){
+          const m = meanColor(v, w, h, oval);
+          const ng = m.map((c, i) => Math.min(1.6, Math.max(0.6, c / Math.max(1, S.srcMean[i]))));
+          gain = frame === 0 ? ng : gain.map((g, i) => g * 0.7 + ng[i] * 0.3);
+        }
+        warp.draw(last, gain);
+        const cx = oval.reduce((s, p) => s + p[0], 0) / oval.length, cy = oval.reduce((s, p) => s + p[1], 0) / oval.length;
+        const fw = Math.max(...oval.map(p => p[0])) - Math.min(...oval.map(p => p[0]));
+        const shrink = canBlur ? 0.93 : 0.95;
+        fx.clearRect(0, 0, w, h);
+        fx.filter = canBlur ? `blur(${Math.max(2, fw * 0.035).toFixed(1)}px)` : "none";
+        fx.beginPath(); oval.forEach(([x, y], i) => { const px = cx + (x - cx) * shrink, py = cy + (y - cy) * shrink; i ? fx.lineTo(px, py) : fx.moveTo(px, py); });
+        fx.closePath(); fx.fillStyle = "#fff"; fx.fill(); fx.filter = "none";
+        fx.globalCompositeOperation = "source-in"; fx.drawImage(warp.canvas, 0, 0); fx.globalCompositeOperation = "source-over";
+        ctx.drawImage(face, 0, 0);
+      }
+      watermark(ctx, w, h);
+      frame++;
+      if (isFinite(v.duration) && v.duration > 0) fill.style.width = (100 * v.currentTime / v.duration).toFixed(0) + "%";
+    };
+
+    const vstream = out.captureStream(30);
+    const tracks = [...vstream.getVideoTracks()];
+    let src = null;
+    if (voiceBuf){
+      const dest = ac.createMediaStreamDestination();
+      src = ac.createBufferSource(); src.buffer = voiceBuf;
+      src.connect(dest); src.connect(ac.destination);
+      tracks.push(...dest.stream.getAudioTracks());
+    }
+    const mime = pickMime();
+    const rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType:mime } : undefined);
+    const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const stopped = new Promise(ok => rec.onstop = ok);
+
+    msg("AI đang ghép khuôn mặt từng khung hình…");
+    render();
+    rec.start(250);
+    const useRVFC = "requestVideoFrameCallback" in HTMLVideoElement.prototype;
+    let running = true;
+    const loop = () => { if (!running) return; render(); useRVFC ? v.requestVideoFrameCallback(loop) : requestAnimationFrame(loop); };
+    await v.play();
+    if (src) src.start();
+    useRVFC ? v.requestVideoFrameCallback(loop) : requestAnimationFrame(loop);
+    await new Promise(ok => v.onended = ok);
+    running = false;
+    await new Promise(ok => setTimeout(ok, 300));
+    rec.stop(); await stopped; ac.close();
+
+    const blob = new Blob(chunks, { type: rec.mimeType || mime || "video/webm" });
+    const url = URL.createObjectURL(blob);
+    const res = document.createElement("video"); res.src = url; res.controls = true; res.playsInline = true;
+    $("fakeBox").replaceChildren(res);
+    v.controls = true; v.muted = false; v.currentTime = 0;
+    const dl = $("btnDownload"); dl.href = url; dl.download = "video-gia-deepfake." + (blob.type.includes("mp4") ? "mp4" : "webm"); dl.hidden = false;
+    fill.style.width = "100%";
+    msg(voiceBuf ? "Xong! Bấm phát để xem và nghe video giả. Thử so sánh với bản gốc bên trái." : "Xong! Clip không có tiếng hoặc trình duyệt không đọc được âm thanh, nên video giả không có giọng.");
+    res.play().catch(()=>{});
+  }catch(e){
+    console.error(e); msg("Có lỗi: " + e.message);
+  }finally{
+    S.busy = false; updateMake(); setTimeout(() => $("bar").hidden = true, 1500);
+  }
+}
+</script>
+</body>
+</html>
